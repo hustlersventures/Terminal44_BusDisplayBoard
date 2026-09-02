@@ -69,6 +69,7 @@ SESSION_SECRET=                 # random string, signs the admin session cookie
 npm install
 npm run dev
 ```
+//test
 
 Then open `http://localhost:3000/admin/login` (default: `admin` / `terminal44@`) and
 `http://localhost:3000/display` in a separate tab/device to watch updates sync live.
