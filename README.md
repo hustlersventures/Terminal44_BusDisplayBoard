@@ -99,7 +99,7 @@ Saving a new arrival automatically retires (marks `departed`, `is_active=false`)
 active row for that same bus number, so the board never shows one bus in two bays at once.
 
 ### Cities (route From/To)
-
+//
 From/To are `<select>` dropdowns, not free text — this is deliberate: typing "Hyd" instead
 of "Hyderabad" would silently fragment the data. The valid values live in a Postgres enum
 (`public.bus_route_city`), not a table — there are no auxiliary tables in this project for
@@ -138,6 +138,7 @@ SESSION_SECRET=                 # random string, signs the admin session cookie
 npm install
 npm run dev
 ```
+//test
 
 Then open `http://localhost:3000/admin/login` (default: `admin` / `terminal44@`) and
 `http://localhost:3000/display` in a separate tab/device to watch updates sync live.

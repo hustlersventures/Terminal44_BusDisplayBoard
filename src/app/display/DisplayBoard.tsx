@@ -27,25 +27,12 @@ export default function DisplayBoard({
   const [phase, setPhase] = useState<Phase>("bus");
   const [busPage, setBusPage] = useState(0);
   const [adIndex, setAdIndex] = useState(0);
-
-  // Status ("Arrived" → "Leaving Soon" → "Departed") is time-driven and
-  // there's no realtime event for "10 minutes before departure" or "time's
-  // up" — this tick just forces a re-render often enough to catch those
-  // transitions on an otherwise-idle board.
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 30_000);
-    return () => clearInterval(id);
-  }, []);
-
-  // Once a bus's computed status reaches "departed" it drops off the public
-  // board — the admin dashboard is what actually persists that (see
-  // getActiveBuses' sweep); this just keeps this view honest in between.
-  const visibleBuses = useMemo(
-    () => buses.filter((b) => computeDisplayStatus(b) !== "departed"),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [buses, tick],
-  );
+  // Refreshed every few seconds purely to force a re-check of the
+  // departed-grace filter below — no DB write happens the moment a grace
+  // window elapses, so nothing else would otherwise trigger that row's
+  // removal right on time. Starts null (not Date.now()) so the first render
+  // stays pure/SSR-safe; set from an effect instead.
+  const [nowMs, setNowMs] = useState<number | null>(null);
 
   // --- Realtime sync: any change on either table triggers a fresh fetch. ---
   // Simplest reliable approach for a handful of rows — no manual patching,
@@ -66,11 +53,26 @@ export default function DisplayBoard({
     };
   }, [supabase]);
 
+  useEffect(() => {
+    const update = () => setNowMs(Date.now());
+    update();
+    const id = setInterval(update, 15_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // A bus marked "departed" keeps showing for DEPARTED_GRACE_MS after that,
+  // then its row drops off the board entirely.
+  const visibleBuses = useMemo(() => {
+    if (nowMs === null) return buses;
+    const cutoff = nowMs - ROTATION.DEPARTED_GRACE_MS;
+    return buses.filter((bus) => bus.status !== "departed" || new Date(bus.updated_at).getTime() >= cutoff);
+  }, [buses, nowMs]);
+
   const totalBusPages = Math.max(1, Math.ceil(visibleBuses.length / ROTATION.BUS_PAGE_SIZE));
-  // Clamped for rendering/scheduling — the bus list can shrink (realtime,
-  // or a bus quietly aging into "departed") out from under a busPage that
-  // was valid when it was set.
+  // Clamped for rendering/scheduling — the bus list can shrink (realtime)
+  // out from under a busPage that was valid when it was set.
   const safeBusPage = busPage < totalBusPages ? busPage : 0;
+  const currentBusPage = visibleBuses.slice(
   const currentBusPage = visibleBuses.slice(
     safeBusPage * ROTATION.BUS_PAGE_SIZE,
     safeBusPage * ROTATION.BUS_PAGE_SIZE + ROTATION.BUS_PAGE_SIZE,
@@ -120,26 +122,28 @@ export default function DisplayBoard({
     setPhase("bus");
   }
 
+  const showingAd = phase === "ad" && !!activeAd;
+
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-white">
-      <header className="flex items-center justify-between bg-orange-500 px-5 py-3 text-white md:px-8 md:py-4">
-        <div>
-          <p className="text-xs font-semibold tracking-widest opacity-80 md:text-sm">TERMINAL 44</p>
-          <h1 className="text-xl font-extrabold md:text-3xl">Bus Bay Arrivals</h1>
-        </div>
-        <div className="text-xl font-bold md:text-3xl">
+      {!showingAd && (
+        <header className="flex items-center justify-between bg-orange-500 px-4 py-1.5 text-white md:px-6 md:py-2">
+          <div>
+            <p className="text-[10px] font-semibold tracking-widest opacity-80 md:text-xs">TERMINAL 44</p>
+            <h1 className="text-base font-extrabold md:text-xl">Bus Bay Arrivals</h1>
+          </div>
           <Clock />
-        </div>
-      </header>
+        </header>
+      )}
 
-      {phase === "bus" || !activeAd ? (
+      {!showingAd ? (
         <BusGrid buses={currentBusPage} />
       ) : (
         <AdSlide ad={activeAd} onVideoEnded={advanceFromVideoEnd} />
       )}
 
       {totalBusPages > 1 && phase === "bus" && (
-        <div className="flex items-center justify-center gap-1.5 bg-orange-50 py-2">
+        <div className="flex items-center justify-center gap-1.5 bg-orange-50 py-1.5">
           {Array.from({ length: totalBusPages }).map((_, i) => (
             <span
               key={i}

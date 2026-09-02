@@ -8,7 +8,7 @@ export default function AdSlide({ ad, onVideoEnded }: { ad: Advertisement; onVid
   const playsFullLength = ad.media_type === "video" && ad.play_full_duration;
 
   return (
-    <div className="flex flex-1 items-center justify-center bg-stone-900">
+    <div className="flex flex-1 items-center justify-center overflow-hidden bg-stone-900">
       {ad.media_type === "video" ? (
         <video
           key={ad.id}
@@ -18,11 +18,13 @@ export default function AdSlide({ ad, onVideoEnded }: { ad: Advertisement; onVid
           playsInline
           loop={!playsFullLength}
           onEnded={playsFullLength ? onVideoEnded : undefined}
-          className="max-h-full max-w-full"
+          // Fill the full screen on any device — aspect ratio preserved,
+          // cropping whatever overflows rather than letterboxing.
+          className="h-full w-full object-cover"
         />
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
-        <img key={ad.id} src={ad.public_url} alt={ad.title} className="max-h-full max-w-full object-contain" />
+        <img key={ad.id} src={ad.public_url} alt={ad.title} className="h-full w-full object-cover" />
       )}
     </div>
   );
