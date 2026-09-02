@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { busArrivalSchema, type BusArrivalInput } from "@/lib/validation";
 import { istInputToIso } from "@/lib/datetime";
+import { computeDisplayStatus } from "@/lib/busStatus";
 import type { BusBayDisplay, BusStatus } from "@/lib/types";
 
 export interface ActionResult {
@@ -12,7 +13,14 @@ export interface ActionResult {
   id?: string;
 }
 
-/** All currently displayed (is_active) bus entries, for the admin dashboard and the live board. */
+/**
+ * All currently displayed (is_active) bus entries, for the admin dashboard
+ * and the live board. Status is time-driven (see computeDisplayStatus) —
+ * there's no cron to flip a row to "departed" the instant its time passes,
+ * so this sweeps for it on every load instead: any row whose computed
+ * status has reached "departed" gets persisted as such and dropped from
+ * what's returned, the same as if someone had removed it by hand.
+ */
 export async function getActiveBuses(): Promise<BusBayDisplay[]> {
   const supabase = createAdminClient();
   const { data, error } = await supabase
@@ -21,7 +29,21 @@ export async function getActiveBuses(): Promise<BusBayDisplay[]> {
     .eq("is_active", true)
     .order("sort_order", { ascending: true });
   if (error) throw error;
-  return data as BusBayDisplay[];
+  const buses = data as BusBayDisplay[];
+
+  const toRetire = buses.filter((b) => b.status !== "departed" && computeDisplayStatus(b) === "departed");
+  if (toRetire.length > 0) {
+    await supabase
+      .from("bus_bay_display")
+      .update({ status: "departed", is_active: false, updated_at: new Date().toISOString() })
+      .in(
+        "id",
+        toRetire.map((b) => b.id),
+      );
+  }
+
+  const retiredIds = new Set(toRetire.map((b) => b.id));
+  return buses.filter((b) => !retiredIds.has(b.id));
 }
 
 /** Distinct bay codes seen so far, used to build a quick-pick list in the arrival form. */
@@ -31,13 +53,6 @@ export async function getDistinctBays(): Promise<string[]> {
   if (error) throw error;
   const unique = new Set((data as { bay: string }[]).map((row) => row.bay));
   return Array.from(unique).sort();
-}
-
-export async function getBusById(id: string): Promise<BusBayDisplay | null> {
-  const supabase = createAdminClient();
-  const { data, error } = await supabase.from("bus_bay_display").select("*").eq("id", id).maybeSingle();
-  if (error) throw error;
-  return data as BusBayDisplay | null;
 }
 
 /**
@@ -115,10 +130,9 @@ export async function createArrival(input: BusArrivalInput): Promise<ActionResul
       operator_name: value.operator_name.trim(),
       route_from: value.route_from.trim(),
       route_to: value.route_to.trim(),
-      route_via: value.route_via,
       scheduled_arrival: istInputToIso(value.scheduled_arrival),
       scheduled_departure: istInputToIso(value.scheduled_departure),
-      status: value.status,
+      status: "arrived",
       sort_order: nextSortOrder,
       is_active: true,
     })
@@ -130,55 +144,13 @@ export async function createArrival(input: BusArrivalInput): Promise<ActionResul
   return { ok: true, id: data.id };
 }
 
-export async function updateArrival(id: string, input: BusArrivalInput): Promise<ActionResult> {
-  const parsed = busArrivalSchema.safeParse(input);
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
-  }
-  const value = parsed.data;
-  const supabase = createAdminClient();
-
-  const { error } = await supabase
-    .from("bus_bay_display")
-    .update({
-      bay: value.bay.trim(),
-      bus_number: normalizeBusNumber(value.bus_number),
-      operator_name: value.operator_name.trim(),
-      route_from: value.route_from.trim(),
-      route_to: value.route_to.trim(),
-      route_via: value.route_via,
-      scheduled_arrival: istInputToIso(value.scheduled_arrival),
-      scheduled_departure: istInputToIso(value.scheduled_departure),
-      status: value.status,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", id);
-  if (error) return { ok: false, error: error.message };
-
-  revalidatePath("/admin");
-  return { ok: true, id };
-}
-
-/** Quick status change (e.g. mark boarding/departed) without opening the full edit form. */
+/** Manual status override — the normal path is automatic (see computeDisplayStatus). */
 export async function setBusStatus(id: string, status: BusStatus): Promise<ActionResult> {
   const supabase = createAdminClient();
   const isActive = status !== "departed";
   const { error } = await supabase
     .from("bus_bay_display")
     .update({ status, is_active: isActive, updated_at: new Date().toISOString() })
-    .eq("id", id);
-  if (error) return { ok: false, error: error.message };
-
-  revalidatePath("/admin");
-  return { ok: true, id };
-}
-
-/** Removes an entry from the live board without deleting its history. */
-export async function removeFromDisplay(id: string): Promise<ActionResult> {
-  const supabase = createAdminClient();
-  const { error } = await supabase
-    .from("bus_bay_display")
-    .update({ is_active: false, updated_at: new Date().toISOString() })
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
 

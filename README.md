@@ -35,6 +35,22 @@ The additions, in `supabase/migrations/`:
   table from before the rename (confirmed empty first); its matching orphaned storage
   bucket was removed separately via the Storage API, since Supabase blocks direct SQL
   deletes on `storage.buckets`.
+- **`0004_cities.sql`** — superseded by `0005` below; kept for history.
+- **`0005_cities_enum.sql`** — drops the `cities` table from `0004` and replaces it with a
+  Postgres enum, `public.bus_route_city`, seeded with the same 10 cities. Backs the From/To
+  dropdowns in the arrival form (see below). Not a foreign key on `bus_bay_display` —
+  `route_from`/`route_to` there are still plain `text`; the enum only constrains what the
+  admin UI lets you pick or add.
+
+  **Naming note, worth reading before touching this:** this shared project already has an
+  unrelated `public.city_enum` used by `parking_locations.city` (a different, pre-existing
+  part of the system). An earlier draft of this migration used that same name and,
+  because `bus_route_city`'s creation was guarded with `if not exists`, silently reused
+  the existing type instead of erroring — meaning a later step nearly polluted an
+  unrelated production enum before it was caught and repaired. `bus_route_city` is
+  deliberately namespaced to avoid this. **Before naming any new DB object in this
+  project, check it doesn't already exist for something else** — this is a big shared
+  database, not one scoped to this app.
 
 Run a new migration with:
 
@@ -48,6 +64,26 @@ There's no separate bus/operator master table — `bus_bay_display` is itself th
 "Search an existing bus" looks up past rows by `bus_number` and prefills operator/route.
 Saving a new arrival automatically retires (marks `departed`, `is_active=false`) any other
 active row for that same bus number, so the board never shows one bus in two bays at once.
+
+### Cities (route From/To)
+
+From/To are `<select>` dropdowns, not free text — this is deliberate: typing "Hyd" instead
+of "Hyderabad" would silently fragment the data. The valid values live in a Postgres enum
+(`public.bus_route_city`), not a table — there are no auxiliary tables in this project for
+small curated lists like this.
+
+There are also **no DB-side functions** (no RPCs) — PostgREST/supabase-js can't query or
+extend an enum type on its own, so `src/lib/actions/cities.ts` talks to Postgres directly
+via a small connection pool (`src/lib/db.ts`, using the `DB_*` env vars) instead of going
+through the usual Supabase client. This is the one place in the app that does that; it's
+the trade-off of "enum instead of table, no DB functions."
+
+An admin can add a new city inline from either dropdown (auto-selected once added), or
+from `/admin/cities`. **Adding is one-way** — Postgres enums have no `DROP VALUE`, so once
+a city is added it's permanent; the Cities page has no delete button by design.
+
+There's no "Via" field anymore — it was removed from the form (the `route_via` column
+still exists on `bus_bay_display` for old rows, just unused going forward).
 
 ## Environment variables
 

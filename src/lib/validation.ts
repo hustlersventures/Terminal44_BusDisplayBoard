@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { BUS_STATUSES } from "@/lib/types";
 
 export const busArrivalSchema = z.object({
   bay: z.string().trim().min(1, "Bay is required").max(20),
@@ -7,15 +6,8 @@ export const busArrivalSchema = z.object({
   operator_name: z.string().trim().min(1, "Operator is required").max(100),
   route_from: z.string().trim().min(1, "Origin is required").max(100),
   route_to: z.string().trim().min(1, "Destination is required").max(100),
-  route_via: z
-    .string()
-    .trim()
-    .max(200)
-    .optional()
-    .transform((v) => (v ? v : null)),
   scheduled_arrival: z.string().min(1, "Arrival time is required"),
   scheduled_departure: z.string().min(1, "Departure time is required"),
-  status: z.enum(BUS_STATUSES),
 });
 
 export type BusArrivalInput = z.infer<typeof busArrivalSchema>;

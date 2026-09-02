@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPublicClient } from "@/lib/supabase/public";
 import { fetchDisplayAds, fetchDisplayBuses } from "@/lib/data/display";
 import { ROTATION } from "@/lib/constants";
+import { computeDisplayStatus } from "@/lib/busStatus";
 import type { Advertisement, BusBayDisplay } from "@/lib/types";
 import BusGrid from "./BusGrid";
 import AdSlide from "./AdSlide";
@@ -71,6 +72,7 @@ export default function DisplayBoard({
   // Clamped for rendering/scheduling — the bus list can shrink (realtime)
   // out from under a busPage that was valid when it was set.
   const safeBusPage = busPage < totalBusPages ? busPage : 0;
+  const currentBusPage = visibleBuses.slice(
   const currentBusPage = visibleBuses.slice(
     safeBusPage * ROTATION.BUS_PAGE_SIZE,
     safeBusPage * ROTATION.BUS_PAGE_SIZE + ROTATION.BUS_PAGE_SIZE,

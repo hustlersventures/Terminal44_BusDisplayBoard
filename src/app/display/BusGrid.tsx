@@ -1,12 +1,11 @@
 import { STATUS_LABELS, type BusBayDisplay, type BusStatus } from "@/lib/types";
+import { computeDisplayStatus } from "@/lib/busStatus";
 import { formatIstTime } from "@/lib/datetime";
 import SplitFlap from "./SplitFlap";
 
 const STATUS_DOT: Record<BusStatus, string> = {
-  scheduled: "bg-stone-400",
-  approaching: "bg-sky-500",
-  boarding: "bg-amber-500",
-  at_terminal: "bg-orange-500",
+  arrived: "bg-orange-500",
+  leaving_soon: "bg-amber-500",
   departed: "bg-stone-300",
 };
 

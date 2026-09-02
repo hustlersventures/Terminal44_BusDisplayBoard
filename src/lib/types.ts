@@ -1,10 +1,4 @@
-export const BUS_STATUSES = [
-  "scheduled",
-  "approaching",
-  "boarding",
-  "at_terminal",
-  "departed",
-] as const;
+export const BUS_STATUSES = ["arrived", "leaving_soon", "departed"] as const;
 
 export type BusStatus = (typeof BUS_STATUSES)[number];
 
@@ -44,9 +38,7 @@ export interface Advertisement {
 }
 
 export const STATUS_LABELS: Record<BusStatus, string> = {
-  scheduled: "Scheduled",
-  approaching: "Approaching",
-  boarding: "Boarding",
-  at_terminal: "At Terminal",
+  arrived: "Arrived",
+  leaving_soon: "Leaving Soon",
   departed: "Departed",
 };

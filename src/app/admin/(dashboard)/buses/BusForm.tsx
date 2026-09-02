@@ -3,8 +3,9 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { searchBuses } from "@/lib/actions/buses";
 import { isoToIstInput } from "@/lib/datetime";
-import { BUS_STATUSES, STATUS_LABELS, type BusBayDisplay, type BusStatus } from "@/lib/types";
+import type { BusBayDisplay } from "@/lib/types";
 import type { FormState } from "./formActions";
+import CitySelect from "./CitySelect";
 
 export interface BusFormValues {
   bay: string;
@@ -12,10 +13,8 @@ export interface BusFormValues {
   operator_name: string;
   route_from: string;
   route_to: string;
-  route_via: string;
   scheduled_arrival: string; // datetime-local value, IST
   scheduled_departure: string; // datetime-local value, IST
-  status: BusStatus;
 }
 
 function defaultValues(): BusFormValues {
@@ -27,28 +26,26 @@ function defaultValues(): BusFormValues {
     operator_name: "",
     route_from: "",
     route_to: "",
-    route_via: "",
     scheduled_arrival: isoToIstInput(now.toISOString()),
     scheduled_departure: isoToIstInput(in45.toISOString()),
-    status: "at_terminal",
   };
 }
 
+// There's no more "edit" form — a bus is always "Arrived" the moment it's
+// added, and status from there is either automatic (see computeDisplayStatus)
+// or a quick manual override right on the dashboard card.
 export default function BusForm({
   action,
-  initialValues,
   existingBays,
-  mode,
-  submitLabel,
+  cities: initialCities,
 }: {
   action: (state: FormState | undefined, formData: FormData) => Promise<FormState>;
-  initialValues?: Partial<BusFormValues>;
   existingBays: string[];
-  mode: "new" | "edit";
-  submitLabel: string;
+  cities: string[];
 }) {
+  const [cities, setCities] = useState(initialCities);
   const [state, formAction, pending] = useActionState(action, undefined);
-  const [fields, setFields] = useState<BusFormValues>({ ...defaultValues(), ...initialValues });
+  const [fields, setFields] = useState<BusFormValues>(defaultValues());
 
   const [suggestions, setSuggestions] = useState<BusBayDisplay[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -59,7 +56,6 @@ export default function BusForm({
   }
 
   useEffect(() => {
-    if (mode !== "new") return;
     const q = fields.bus_number.trim();
     searchTimer.current = setTimeout(async () => {
       if (q.length < 2) {
@@ -72,16 +68,22 @@ export default function BusForm({
     return () => {
       if (searchTimer.current) clearTimeout(searchTimer.current);
     };
-  }, [fields.bus_number, mode]);
+  }, [fields.bus_number]);
+
+  function ensureCityOption(city: string) {
+    // Safety net for historical rows whose city predates the cities list.
+    setCities((prev) => (prev.includes(city) ? prev : [...prev, city].sort()));
+  }
 
   function applySuggestion(bus: BusBayDisplay) {
+    ensureCityOption(bus.route_from);
+    ensureCityOption(bus.route_to);
     setFields((prev) => ({
       ...prev,
       bus_number: bus.bus_number,
       operator_name: bus.operator_name,
       route_from: bus.route_from,
       route_to: bus.route_to,
-      route_via: bus.route_via ?? "",
     }));
     setShowSuggestions(false);
     setSuggestions([]);
@@ -105,7 +107,7 @@ export default function BusForm({
           onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
           className="rounded-xl border border-stone-300 px-4 py-3.5 text-base font-mono outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
         />
-        {mode === "new" && showSuggestions && suggestions.length > 0 && (
+        {showSuggestions && suggestions.length > 0 && (
           <ul className="absolute top-full z-20 mt-1 w-full overflow-hidden rounded-xl border border-stone-200 bg-white shadow-lg">
             {suggestions.map((bus) => (
               <li key={bus.id}>
@@ -123,11 +125,7 @@ export default function BusForm({
             ))}
           </ul>
         )}
-        {mode === "new" && (
-          <p className="text-xs text-stone-400">
-            Matches an existing bus? Tap it to reuse its operator &amp; route.
-          </p>
-        )}
+        <p className="text-xs text-stone-400">Matches an existing bus? Tap it to reuse its operator &amp; route.</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -145,45 +143,24 @@ export default function BusForm({
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="route_from" className="text-sm font-medium text-stone-700">
-            From
-          </label>
-          <input
-            id="route_from"
-            name="route_from"
-            required
-            value={fields.route_from}
-            onChange={(e) => set("route_from", e.target.value)}
-            className="rounded-xl border border-stone-300 px-4 py-3.5 text-base outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="route_to" className="text-sm font-medium text-stone-700">
-            To
-          </label>
-          <input
-            id="route_to"
-            name="route_to"
-            required
-            value={fields.route_to}
-            onChange={(e) => set("route_to", e.target.value)}
-            className="rounded-xl border border-stone-300 px-4 py-3.5 text-base outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
-          />
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="route_via" className="text-sm font-medium text-stone-700">
-          Via <span className="font-normal text-stone-400">(optional)</span>
-        </label>
-        <input
-          id="route_via"
-          name="route_via"
-          value={fields.route_via}
-          onChange={(e) => set("route_via", e.target.value)}
-          className="rounded-xl border border-stone-300 px-4 py-3.5 text-base outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <CitySelect
+          id="route_from"
+          name="route_from"
+          label="From"
+          value={fields.route_from}
+          cities={cities}
+          onChange={(v) => set("route_from", v)}
+          onCityAdded={ensureCityOption}
+        />
+        <CitySelect
+          id="route_to"
+          name="route_to"
+          label="To"
+          value={fields.route_to}
+          cities={cities}
+          onChange={(v) => set("route_to", v)}
+          onCityAdded={ensureCityOption}
         />
       </div>
 
@@ -239,25 +216,6 @@ export default function BusForm({
         </div>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="status" className="text-sm font-medium text-stone-700">
-          Status
-        </label>
-        <select
-          id="status"
-          name="status"
-          value={fields.status}
-          onChange={(e) => set("status", e.target.value as BusStatus)}
-          className="rounded-xl border border-stone-300 bg-white px-4 py-3.5 text-base outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
-        >
-          {BUS_STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {STATUS_LABELS[s]}
-            </option>
-          ))}
-        </select>
-      </div>
-
       {state?.error && (
         <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
           {state.error}
@@ -269,7 +227,7 @@ export default function BusForm({
         disabled={pending}
         className="mt-2 rounded-xl bg-orange-500 px-6 py-4 text-base font-semibold text-white shadow-md shadow-orange-200 transition active:scale-[0.98] hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {pending ? "Saving…" : submitLabel}
+        {pending ? "Saving…" : "Save Arrival"}
       </button>
     </form>
   );

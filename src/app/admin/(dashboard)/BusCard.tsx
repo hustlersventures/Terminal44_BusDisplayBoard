@@ -1,36 +1,30 @@
 "use client";
 
 import { useTransition } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { setBusStatus, removeFromDisplay } from "@/lib/actions/buses";
+import { setBusStatus } from "@/lib/actions/buses";
+import { computeDisplayStatus } from "@/lib/busStatus";
 import { formatIstTime } from "@/lib/datetime";
 import { BUS_STATUSES, STATUS_LABELS, type BusBayDisplay, type BusStatus } from "@/lib/types";
 import SplitFlap from "@/app/display/SplitFlap";
 
-const STATUS_STYLES: Record<BusStatus, string> = {
-  scheduled: "bg-stone-100 text-stone-700",
-  approaching: "bg-sky-100 text-sky-700",
-  boarding: "bg-amber-100 text-amber-800",
-  at_terminal: "bg-orange-100 text-orange-800",
-  departed: "bg-stone-200 text-stone-500",
+const STATUS_ACTIVE_STYLES: Record<BusStatus, string> = {
+  arrived: "bg-orange-500 text-white",
+  leaving_soon: "bg-amber-500 text-white",
+  departed: "bg-stone-500 text-white",
 };
 
 export default function BusCard({ bus }: { bus: BusBayDisplay }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const displayStatus = computeDisplayStatus(bus);
 
   function handleStatusChange(status: BusStatus) {
+    if (status === "departed" && !confirm(`Mark ${bus.bus_number} as departed? It will leave the live display.`)) {
+      return;
+    }
     startTransition(async () => {
       await setBusStatus(bus.id, status);
-      router.refresh();
-    });
-  }
-
-  function handleRemove() {
-    if (!confirm(`Remove ${bus.bus_number} from the live display?`)) return;
-    startTransition(async () => {
-      await removeFromDisplay(bus.id);
       router.refresh();
     });
   }
