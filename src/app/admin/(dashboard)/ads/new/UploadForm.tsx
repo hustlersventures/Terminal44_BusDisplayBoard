@@ -37,6 +37,8 @@ export default function UploadForm() {
   const [file, setFile] = useState<File | null>(null);
   const [mediaType, setMediaType] = useState<AdMediaType | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
+  // Default: every ad (including video) shows for the standard 5s slot.
+  const [playFullDuration, setPlayFullDuration] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
@@ -45,6 +47,7 @@ export default function UploadForm() {
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     setError(null);
     setDuration(null);
+    setPlayFullDuration(false);
     setPreviewUrl(null);
     setFile(null);
     setMediaType(null);
@@ -103,6 +106,7 @@ export default function UploadForm() {
     formData.set("media_type", mediaType);
     formData.set("file", file);
     if (duration != null) formData.set("duration_seconds", String(duration));
+    formData.set("play_full_duration", String(mediaType === "video" && playFullDuration));
 
     setSubmitting(true);
     const result = await uploadAdvertisement(formData);
@@ -161,6 +165,25 @@ export default function UploadForm() {
             <p className="px-3 py-1.5 text-xs text-stone-500">Duration: {duration.toFixed(1)}s</p>
           )}
         </div>
+      )}
+
+      {mediaType === "video" && !error && (
+        <label className="flex items-start gap-3 rounded-xl border border-stone-200 px-4 py-3.5">
+          <input
+            type="checkbox"
+            checked={playFullDuration}
+            onChange={(e) => setPlayFullDuration(e.target.checked)}
+            className="mt-0.5 h-5 w-5 accent-orange-500"
+          />
+          <span className="text-sm text-stone-700">
+            Play the full video ({duration?.toFixed(1)}s) instead of the default {ROTATION.DEFAULT_AD_MS / 1000}s
+            slot.
+            <span className="block text-xs text-stone-400">
+              Leave this unchecked to show it for {ROTATION.DEFAULT_AD_MS / 1000}s like every other ad — you can
+              change this later from the advertisements list.
+            </span>
+          </span>
+        </label>
       )}
 
       {error && (

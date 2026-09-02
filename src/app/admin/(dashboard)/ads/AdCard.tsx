@@ -2,7 +2,8 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toggleAdvertisementActive, deleteAdvertisement, moveAdvertisement } from "@/lib/actions/ads";
+import { toggleAdvertisementActive, deleteAdvertisement, moveAdvertisement, setPlayFullDuration } from "@/lib/actions/ads";
+import { ROTATION } from "@/lib/constants";
 import type { Advertisement } from "@/lib/types";
 
 const MEDIA_BADGE: Record<Advertisement["media_type"], string> = {
@@ -33,6 +34,13 @@ export default function AdCard({
   function toggleActive() {
     startTransition(async () => {
       await toggleAdvertisementActive(ad.id, !ad.is_active);
+      router.refresh();
+    });
+  }
+
+  function toggleFullDuration() {
+    startTransition(async () => {
+      await setPlayFullDuration(ad.id, !ad.play_full_duration);
       router.refresh();
     });
   }
@@ -85,15 +93,15 @@ export default function AdCard({
             <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${MEDIA_BADGE[ad.media_type]}`}>
               {ad.media_type}
             </span>
-            {ad.duration_seconds != null && (
-              <span className="text-xs text-stone-400">{ad.duration_seconds.toFixed(1)}s</span>
-            )}
           </div>
           <p className="mt-0.5 text-xs text-stone-400">
-            {ad.is_active ? "Showing in rotation" : "Hidden from display"}
+            {ad.is_active ? "Showing in rotation" : "Hidden from display"} ·{" "}
+            {ad.media_type === "video" && ad.play_full_duration
+              ? `Full length (${ad.duration_seconds?.toFixed(1)}s)`
+              : `${ROTATION.DEFAULT_AD_MS / 1000}s slot`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             disabled={pending}
@@ -104,6 +112,16 @@ export default function AdCard({
           >
             {ad.is_active ? "Disable" : "Enable"}
           </button>
+          {ad.media_type === "video" && (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={toggleFullDuration}
+              className="rounded-lg bg-stone-100 px-3 py-1.5 text-xs font-semibold text-stone-600 hover:bg-stone-200"
+            >
+              {ad.play_full_duration ? `Switch to ${ROTATION.DEFAULT_AD_MS / 1000}s slot` : "Play full length"}
+            </button>
+          )}
           <button
             type="button"
             disabled={pending}

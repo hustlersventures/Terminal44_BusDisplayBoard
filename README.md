@@ -20,13 +20,21 @@ This app reuses the **existing** `bus_bay_display` table in the shared Fleetzen 
 project (see `current_schema.sql`) — it is not a dedicated database for this app, so
 migrations only ever add what's genuinely new and never touch unrelated tables.
 
-The one addition, in `supabase/migrations/0001_bus_advertisements.sql`:
+The additions, in `supabase/migrations/`:
 
-- `public.bus_advertisements` table (image/gif/video, display order, active flag, measured
-  video duration with a DB-level `CHECK` capping it at 20s).
-- `bus_advertisements` Storage bucket (public read).
-- Both added to the `supabase_realtime` publication and given a public-read RLS policy,
-  matching the convention already used for `bus_bay_display`.
+- **`0001_advertisements.sql`** — `public.bus_advertisements` table (image/gif/video,
+  display order, active flag, measured video duration with a DB-level `CHECK` capping it
+  at 20s) and a `bus_advertisements` Storage bucket (public read). Both added to the
+  `supabase_realtime` publication and given a public-read RLS policy, matching the
+  convention already used for `bus_bay_display`. (The file is named `advertisements`;
+  the table inside it is `bus_advertisements` — a rename mid-build renamed the table but
+  not the migration filename.)
+- **`0002_ad_play_full_duration.sql`** — adds `play_full_duration` (see Rotation timing
+  below).
+- **`0003_drop_old_advertisements.sql`** — drops a same-session leftover `advertisements`
+  table from before the rename (confirmed empty first); its matching orphaned storage
+  bucket was removed separately via the Storage API, since Supabase blocks direct SQL
+  deletes on `storage.buckets`.
 
 Run a new migration with:
 
@@ -67,10 +75,22 @@ Then open `http://localhost:3000/admin/login` (default: `admin` / `terminal44@`)
 
 ## Rotation timing
 
-Hardcoded in `src/lib/constants.ts` (`ROTATION`) — bus display duration, default ad
-duration for images/GIFs, the 20s video cap, and bus-grid page size — all in one place so
-the schedule is easy to retune without touching the state machine in
-`src/app/display/DisplayBoard.tsx`.
+Hardcoded in `src/lib/constants.ts` (`ROTATION`) — bus display duration, default ad slot
+duration, the 20s video cap, and bus-grid page size — all in one place so the schedule is
+easy to retune without touching the state machine in `src/app/display/DisplayBoard.tsx`.
+
+**Default ad duration is 5s for every media type, including video.** A video only plays
+its full measured length (up to the 20s cap) if `play_full_duration` is set on that ad —
+toggle it at upload time or later from the advertisements list. A short video left on the
+default 5s slot loops to fill it rather than freezing on its last frame.
+
+## Gotchas
+
+- `next.config.ts` sets `experimental.serverActions.bodySizeLimit` to `50mb` — the default
+  1MB limit rejects video uploads (Server Actions carry the file as multipart FormData)
+  before our own `MAX_UPLOAD_BYTES` check ever runs.
+- Editing a migration file after it's been applied doesn't retroactively change the
+  database — always add a new numbered migration for further changes.
 
 ## Deployment
 
