@@ -8,8 +8,10 @@ Petpooja/order-tagging integration is intentionally out of scope for this app �
 
 ## What's here
 
-- **`/admin`** — mobile-first admin portal (login, live bus list, add/edit arrivals,
-  advertisement management). Protected by a signed session cookie; not Supabase Auth.
+- **`/admin`** — mobile-first admin portal (login, live bus list, add arrivals, status
+  overrides, advertisement management). Protected by a signed session cookie; not Supabase
+  Auth. There's no "edit arrival" — a bus's bay/route/times are set once at check-in; only
+  its status can be changed afterward, and even that's automatic by default.
 - **`/display`** — public, unauthenticated live board. Rotates between the bus/bay grid and
   the advertisement sequence, and stays in sync via Supabase Realtime (no polling).
 - **`/`** — simple landing page linking to both.
@@ -52,11 +54,42 @@ The additions, in `supabase/migrations/`:
   project, check it doesn't already exist for something else** — this is a big shared
   database, not one scoped to this app.
 
+- **`0006_simplify_bus_status.sql`** — narrows `status` from 5 values (scheduled/
+  approaching/boarding/at_terminal/departed) to 3 (arrived/leaving_soon/departed) and
+  remaps existing rows accordingly. See Status below.
+
 Run a new migration with:
 
 ```bash
 node -r dotenv/config scripts/run-migration.mjs supabase/migrations/000X_name.sql dotenv_config_path=.env.local
 ```
+
+### Status (Arrived / Leaving Soon / Departed)
+
+Status is time-driven, computed fresh wherever a bus is shown
+(`src/lib/busStatus.ts`) — there's no cron or background job. A bus is
+"Arrived" the instant it's added, switches to "Leaving Soon" automatically
+`ROTATION.LEAVING_SOON_MINUTES` (10) before `scheduled_departure`, and to
+"Departed" once that time passes. The three status buttons on each admin
+card are a manual override, not a replacement for this.
+
+The stored `status` column is a **floor, not the answer** — time can always
+push it forward (arrived → leaving_soon → departed) but never pulls it
+backward. Without that rule, manually picking "Leaving Soon" early would
+look like it silently failed the next time the page loaded and the clock
+alone still said "Arrived". "Departed" is the one truly terminal value:
+once set (manually, or automatically), it stays departed and the row drops
+off the display (`is_active = false`).
+
+Because there's no background job, "departed" only actually gets **written**
+back to the row when something with write access reads the bus list —
+`getActiveBuses()` (used by the admin dashboard) sweeps for it on every
+load. The public display board can't write (anon key, read-only RLS), so it
+only ever *hides* an aged-out bus from its own view (recomputed every 30s)
+without persisting that — the underlying row stays `is_active = true` until
+an admin dashboard load actually sweeps it. In practice that's fine for a
+staffed operational tool, but it's worth knowing if the board and the
+dashboard ever look briefly out of sync.
 
 ### Re-arrival behavior
 
