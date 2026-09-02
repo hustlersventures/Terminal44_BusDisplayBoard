@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { setBusStatus, removeFromDisplay } from "@/lib/actions/buses";
 import { formatIstTime } from "@/lib/datetime";
 import { BUS_STATUSES, STATUS_LABELS, type BusBayDisplay, type BusStatus } from "@/lib/types";
+import SplitFlap from "@/app/display/SplitFlap";
 
 const STATUS_STYLES: Record<BusStatus, string> = {
   scheduled: "bg-stone-100 text-stone-700",
@@ -38,16 +39,15 @@ export default function BusCard({ bus }: { bus: BusBayDisplay }) {
     <li className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="rounded-lg bg-orange-500 px-2.5 py-1 text-sm font-bold text-white">
-              Bay {bus.bay}
-            </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-stone-500">BAY</span>
+            <SplitFlap text={bus.bay} size="sm" />
+            <SplitFlap text={bus.bus_number} size="sm" />
             <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_STYLES[bus.status]}`}>
               {STATUS_LABELS[bus.status]}
             </span>
           </div>
-          <p className="mt-2 text-lg font-bold text-stone-900">{bus.bus_number}</p>
-          <p className="text-sm text-stone-600">{bus.operator_name}</p>
+          <p className="mt-2 text-sm text-stone-600">{bus.operator_name}</p>
           <p className="mt-1 text-sm text-stone-500">
             {bus.route_from} → {bus.route_to}
             {bus.route_via ? ` via ${bus.route_via}` : ""}

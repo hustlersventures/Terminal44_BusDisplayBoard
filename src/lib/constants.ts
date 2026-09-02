@@ -10,8 +10,10 @@ export const ROTATION = {
   DEFAULT_AD_MS: 5_000,
   /** Hard cap enforced both client-side (upload) and DB-side (CHECK constraint). */
   MAX_VIDEO_DURATION_S: 20,
-  /** Bus rows per display page — with 16+ bays the board paginates instead of overflowing. */
-  BUS_PAGE_SIZE: 8,
+  /** Bus rows per display page — the board paginates instead of overflowing/shrinking. */
+  BUS_PAGE_SIZE: 6,
+  /** How long a bus stays visible (as "Departed") after being marked departed, before its row is removed. */
+  DEPARTED_GRACE_MS: 2 * 60 * 1000,
 } as const;
 
 export const SESSION_COOKIE_NAME = "t44_admin_session";
