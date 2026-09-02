@@ -26,12 +26,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <Link href="/admin/ads" className="rounded-lg px-3 py-1.5 text-stone-600 hover:bg-orange-50 hover:text-orange-700">
             Advertisements
           </Link>
-          <Link
-            href="/display"
-            target="_blank"
-            className="rounded-lg px-3 py-1.5 text-stone-600 hover:bg-orange-50 hover:text-orange-700"
-          >
-            View Display ↗
+          <Link href="/admin/cities" className="rounded-lg px-3 py-1.5 text-stone-600 hover:bg-orange-50 hover:text-orange-700">
+            Cities
           </Link>
         </nav>
       </header>

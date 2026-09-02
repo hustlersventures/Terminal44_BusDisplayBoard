@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPublicClient } from "@/lib/supabase/public";
 import { fetchDisplayAds, fetchDisplayBuses } from "@/lib/data/display";
 import { ROTATION } from "@/lib/constants";
+import { computeDisplayStatus } from "@/lib/busStatus";
 import type { Advertisement, BusBayDisplay } from "@/lib/types";
 import BusGrid from "./BusGrid";
 import AdSlide from "./AdSlide";
@@ -27,6 +28,25 @@ export default function DisplayBoard({
   const [busPage, setBusPage] = useState(0);
   const [adIndex, setAdIndex] = useState(0);
 
+  // Status ("Arrived" → "Leaving Soon" → "Departed") is time-driven and
+  // there's no realtime event for "10 minutes before departure" or "time's
+  // up" — this tick just forces a re-render often enough to catch those
+  // transitions on an otherwise-idle board.
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Once a bus's computed status reaches "departed" it drops off the public
+  // board — the admin dashboard is what actually persists that (see
+  // getActiveBuses' sweep); this just keeps this view honest in between.
+  const visibleBuses = useMemo(
+    () => buses.filter((b) => computeDisplayStatus(b) !== "departed"),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [buses, tick],
+  );
+
   // --- Realtime sync: any change on either table triggers a fresh fetch. ---
   // Simplest reliable approach for a handful of rows — no manual patching,
   // no polling.
@@ -46,11 +66,12 @@ export default function DisplayBoard({
     };
   }, [supabase]);
 
-  const totalBusPages = Math.max(1, Math.ceil(buses.length / ROTATION.BUS_PAGE_SIZE));
-  // Clamped for rendering/scheduling — the bus list can shrink (realtime)
-  // out from under a busPage that was valid when it was set.
+  const totalBusPages = Math.max(1, Math.ceil(visibleBuses.length / ROTATION.BUS_PAGE_SIZE));
+  // Clamped for rendering/scheduling — the bus list can shrink (realtime,
+  // or a bus quietly aging into "departed") out from under a busPage that
+  // was valid when it was set.
   const safeBusPage = busPage < totalBusPages ? busPage : 0;
-  const currentBusPage = buses.slice(
+  const currentBusPage = visibleBuses.slice(
     safeBusPage * ROTATION.BUS_PAGE_SIZE,
     safeBusPage * ROTATION.BUS_PAGE_SIZE + ROTATION.BUS_PAGE_SIZE,
   );

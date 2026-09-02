@@ -12,6 +12,8 @@ export const ROTATION = {
   MAX_VIDEO_DURATION_S: 20,
   /** Bus rows per display page — with 16+ bays the board paginates instead of overflowing. */
   BUS_PAGE_SIZE: 8,
+  /** How long before scheduled_departure a bus's status switches to "Leaving Soon". */
+  LEAVING_SOON_MINUTES: 10,
 } as const;
 
 export const SESSION_COOKIE_NAME = "t44_admin_session";
